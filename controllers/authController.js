@@ -5,13 +5,13 @@ const ApiError = require('../utils/ApiError');
 
 const register = async (req, res, next) => {
   try {
-    const { email, password, name } = req.body;
-    if (!email || !password || !name) {
-      throw new ApiError(400, 'Email, password, and name are required');
+    const { email, password, name, mobileNumber } = req.body;
+    if (!email || !password || !name || !mobileNumber) {
+      throw new ApiError(400, 'Email, password, name, mobileNumber are required');
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ email, password: hashedPassword, name });
+    const user = new User({ email, password: hashedPassword, name, mobileNumber });
     await user.save();
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
