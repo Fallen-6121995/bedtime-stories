@@ -1,6 +1,5 @@
 const prompts = {
-  panchatantra: ({ childName, ageGroup, topic, language, langCode }) => {
-    `You are a traditional Indian storyteller.
+  panchatantra: ({ childName, ageGroup, topic, language, langCode }) => `You are a traditional Indian storyteller.
 
 Write a **Panchatantra-style** bedtime story in "${language}" for a child named "${childName}", in the age group "${ageGroup}", about the topic: "${topic}".
 
@@ -22,9 +21,8 @@ Use this structure exactly:
   "story_${langCode}": "Same story translated in ${language}"
 }
 
-Do NOT include any intro text,commentary, explanations, or code formatting. Only return the pure JSON object as shown.`;
-},
-fairyTale: ({ childName, ageGroup, topic, language, langCode }) =>{ `
+Do NOT include any intro text,commentary, explanations, or code formatting. Only return the pure JSON object as shown.`,
+  fairyTale: ({ childName, ageGroup, topic, language, langCode }) => `
 You are an expert children's storyteller.
 
 🎯 GOAL:
@@ -51,10 +49,8 @@ Use this structure exactly:
   "story_${langCode}": "Same story translated in ${language}"
 }
 
-Do NOT include any intro text,commentary, explanations, or code formatting. Only return the pure JSON object as shown.`
-},
-adventureFantasy: ({ childName, ageGroup, topic, language, langCode }) => {
-  `
+Do NOT include any intro text,commentary, explanations, or code formatting. Only return the pure JSON object as shown.`,
+  adventureFantasy: ({ childName, ageGroup, topic, language, langCode }) => `
 
 You are a master storyteller crafting a fantasy adventure story for children aged "${ageGroup}". Your task is to write an engaging, emotionally rich, and culturally appropriate story in "${language}" about "${topic}". 
 
@@ -107,10 +103,8 @@ Use this exact structure:
 }
 
 Return ONLY the pure JSON string. No markdown, no commentary, no formatting — it must be cleanly parsable by JSON.parse().
-`
-},
-mysteryExplorer: ({ childName, ageGroup, topic, language, langCode }) => {
-  `
+`,
+  mysteryExplorer: ({ childName, ageGroup, topic, language, langCode }) => `
   You are a children's mystery author crafting a **safe, exciting explorer-style mystery story** in "${language}" for a child named "${childName}", aged "${ageGroup}".
 
 ---
@@ -152,7 +146,6 @@ Use this structure exactly:
   "story_en": "Full mystery story in English",
   "story_${langCode}": "Same story translated in ${language}"
 }`
-}
 }
 
 

@@ -32,7 +32,14 @@ const extractValidJSON = (text) => {
       }
 
       const langCode = languageCodeMap[language] || "en";
-      const prompt = promts[category]({ childName, ageGroup, topic, language, langCode });
+      const categoryKey = Object.keys(promts).find(
+        (key) => key.toLowerCase() === String(category).trim().toLowerCase()
+      );
+      if (!categoryKey) {
+        throw new ApiError(400, `Invalid category. Allowed: ${Object.keys(promts).join(', ')}`);
+      }
+      const prompt = promts[categoryKey]({ childName, ageGroup, topic, language, langCode });
+      console.log("promt>>", prompt);
 
       const storyText = await generateStory(prompt);
 
@@ -69,9 +76,9 @@ const extractValidJSON = (text) => {
 
       const saved = await story.save();
 
-      if (savedStory.stories.get(langCode)) {
-             const storyId = savedStory._id;
-             const textToSpeech = savedStory.stories.get(langCode);
+      if (saved.stories.get(langCode)) {
+             const storyId = saved._id;
+             const textToSpeech = saved.stories.get(langCode);
              const timestamp = new Date().toISOString().replace(/[-:.]/g, '').slice(0,15);
              const fileName = `story_${storyId}_${langCode}_${timestamp}.mp3`;
 
