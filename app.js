@@ -2,6 +2,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const storyRoutes = require("./routes/stories");
+const authRoutes = require("./routes/auth");
+const errorHandler = require('./middleware/errorHandler');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 
@@ -13,6 +15,8 @@ app.use(express.json());
 // app.use(morgan('dev'));
 app.use(bodyParser.json());
 app.use("/api/stories", storyRoutes);
+app.use("/api/auth", authRoutes)
+app.use(errorHandler);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)

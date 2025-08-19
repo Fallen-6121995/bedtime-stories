@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 
 const storySchema = new mongoose.Schema({
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  isPublic: { type: Boolean, default: false },
   title: String,
   languageCodes: [String], // e.g., ['en', 'hi', 'bn']
   ageGroup: String,

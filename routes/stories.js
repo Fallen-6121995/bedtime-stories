@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { storyGeneration, createStoryAudio, getSpeakers } = require('../controllers/StoryController');
+const { storyGeneration, createStoryAudio, getSpeakers, getStories, toggleVisibility } = require('../controllers/StoryController');
+const { auth } = require('../middleware/auth');
 
-router.post('/generate-story', storyGeneration);
-router.post('/create-audio', createStoryAudio);
-router.get('/get-speakers', getSpeakers);
-
+router.post('/generate-story', auth, storyGeneration);
+router.post('/create-audio', auth, createStoryAudio);
+router.get('/get-speakers', auth, getSpeakers);
+router.get('/', auth, getStories);
+router.patch('/:id/visibility', auth, toggleVisibility);
 
 module.exports = router;

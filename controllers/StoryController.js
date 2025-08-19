@@ -1,4 +1,5 @@
 const Story = require("../models/Story");
+const ApiError = require('../utils/ApiError');
 const { generateStory } = require("../services/togetherAI");
 const { languageCodeMap } = require("../utils/utils")
 const { generateSpeech } = require("../utils/tts");
@@ -22,27 +23,31 @@ const extractValidJSON = (text) => {
     }
     return jsonMatch[0];
   };
-  
-  exports.storyGeneration = async (req, res) => {
+
+  exports.storyGeneration = async (req, res, next) => {
     try {
-      const { childName, ageGroup, topic, language, category } = req.body;
+      const { childName, ageGroup, topic, language, category, isPublic = false } = req.body;
+      if (!childName || !ageGroup || !topic || !language || !category) {
+        throw new ApiError(400, 'childName, ageGroup, topic, language, and category are required');
+      }
+
       const langCode = languageCodeMap[language] || "en";
       const prompt = promts[category]({ childName, ageGroup, topic, language, langCode });
-  
+
       const storyText = await generateStory(prompt);
-  
+
       let storyData;
       try {
         const cleaned = extractValidJSON(storyText);
         storyData = JSON.parse(cleaned);
       } catch (e) {
         console.error("❌ Failed to parse AI JSON:", e.message, "\n--- Raw Response ---\n", storyText);
-        return res.status(500).json({ error: "AI returned invalid JSON. Try again." });
+        throw new ApiError(500, 'AI returned invalid JSON. Try again.');
       }
-  
+
       const storiesMap = {};
       const languageCodes = [];
-  
+
       for (const key of Object.keys(storyData)) {
         if (key.startsWith("story_")) {
           const code = key.replace("story_", "");
@@ -50,8 +55,10 @@ const extractValidJSON = (text) => {
           languageCodes.push(code);
         }
       }
-  
+
       const story = new Story({
+        owner: req.user._id,
+        isPublic,
         title: storyData.title || `${childName} and the ${topic}`,
         languageCodes,
         ageGroup: storyData.ageGroup || ageGroup,
@@ -59,40 +66,85 @@ const extractValidJSON = (text) => {
         promptUsed: prompt,
         generatedBy: "Meta-LLaMA-3-70B"
       });
-  
+
       const saved = await story.save();
+
+      if (savedStory.stories.get(langCode)) {
+             const storyId = savedStory._id;
+             const textToSpeech = savedStory.stories.get(langCode);
+             const timestamp = new Date().toISOString().replace(/[-:.]/g, '').slice(0,15);
+             const fileName = `story_${storyId}_${langCode}_${timestamp}.mp3`;
+
+             console.log(`🚀 Generating speech for [${langCode}] -> ${fileName}`);
+
+             const audioResult = await generateSpeech({
+                       text: textToSpeech,
+                       lang: langCode,
+                       speaker: speaker || 'default',
+                       fileName
+                     });
+             if (audioResult.success) {
+                  console.log(`✅ Audio generation complete: ${audioResult.filePath}`);
+
+                  const bucketName = process.env.S3_BUCKET_NAME;
+                  const s3Key = `audio/${fileName}`;
+
+                  const s3UploadResult = await uploadFileToS3(audioResult.filePath, bucketName, s3Key);
+
+                  if (s3UploadResult.success) {
+                    console.log(`✅ Audio uploaded to S3: ${s3UploadResult.location}`);
+                    savedStory.audioUrl = s3UploadResult.location;
+                    await savedStory.save();
+                  } else {
+                    console.error("❌ S3 Upload Failed:", s3UploadResult.error);
+                  }
+
+                  fs.unlink(audioResult.filePath, (err) => {
+                    if (err) console.error("Error deleting local audio file:", err);
+                    else console.log(`Deleted local file: ${audioResult.filePath}`);
+                  });
+
+                } else {
+                  console.error("❌ TTS generation failed post-story generation:", audioResult.error);
+                }
+              } else {
+                console.warn(`⚠️ Story not available in language code ${langCode} for audio generation.`);
+              }
       res.status(201).json(saved);
     } catch (err) {
-      console.error("🚨 Server Error:", err.message);
-      res.status(500).json({ error: "Story generation failed." });
+      next(err);
     }
   };
 
-  exports.createStoryAudio = async (req, res) => {
+  exports.createStoryAudio = async (req, res, next) => {
     try {
       const { storyId, langCode = 'en', speaker } = req.body;
-      console.log(`🎯 Received audio generation request for story: ${storyId} in lang: ${langCode}`);
-  
-      if (!mongoose.Types.ObjectId.isValid(storyId)) {
-        return res.status(400).json({ error: 'Invalid story ID format.' });
+      if (!storyId || !langCode) {
+        throw new ApiError(400, 'storyId and langCode are required');
       }
-  
+
+      console.log(`🎯 Received audio generation request for story: ${storyId} in lang: ${langCode}`);
+
+      if (!mongoose.Types.ObjectId.isValid(storyId)) {
+        throw new ApiError(400, 'Invalid story ID format.');
+      }
+
       const story = await Story.findById(storyId);
       if (!story) {
-        return res.status(404).json({ error: 'Story not found.' });
+        throw new ApiError(404, 'Story not found.');
       }
-  
+
       const storyText = story.stories.get(langCode) || story.stories[langCode];
       if (!storyText) {
-        return res.status(400).json({ error: `Story not available in language code: ${langCode}` });
+        throw new ApiError(400, `Story not available in language code: ${langCode}`);
       }
-  
+
       // Timestamp
       const timestamp = new Date().toISOString().replace(/[-:.]/g, '').slice(0,15);
       const fileName = `story_${storyId}_${langCode}_${timestamp}.wav`;
-  
+
       console.log(`🚀 Generating speech for [${langCode}] -> ${fileName}`);
-  
+
       // Now pass speaker as well
       const result = await generateSpeech({
         text: storyText,
@@ -100,34 +152,49 @@ const extractValidJSON = (text) => {
         speaker,
         fileName
       });
-  
+
       if (!result.success) {
         console.error("❌ TTS generation failed:", result.error);
-        return res.status(500).json({ error: 'Text-to-speech generation failed', details: result.error });
+        throw new ApiError(500, 'Text-to-speech generation failed');
       }
-  
+
       console.log(`✅ Audio generation complete: ${result.filePath}`);
       res.download(result.filePath);
-  
+
     } catch (err) {
-      console.error("🚨 Narration error:", err);
-      res.status(500).json({ error: 'Narration failed.', details: err.message });
+      next(err);
     }
   };
 
-  exports.getSpeakers = async (req, res) => {
+  exports.getStories = async (req, res, next) => {
     try {
-      const response = await axios.post("http://localhost:8400/speakers");
-  
-      const speakers = response.data.speakers;
-      console.log("Speakers received:", speakers);
-      
-      res.status(200).json({ speakers });
-    } catch (err) {
-      console.error("🚨 Error getting speakers:", err);
-      res.status(500).json({ error: 'Narration failed.', details: err.message });
+      const stories = await Story.find({
+        $or: [
+          { isPublic: true },
+          { owner: req.user._id }
+        ]
+      }).populate('owner', 'name email').sort({ createdAt: -1 });
+
+      res.json(stories);
+    } catch (error) {
+      next(error);
     }
   };
+
+  exports.toggleVisibility = async (req, res, next) => {
+    try {
+      const story = await Story.findOne({ _id: req.params.id, owner: req.user._id });
+      if (!story) throw new ApiError(404, 'Story not found or not owned by user');
+
+      story.isPublic = !story.isPublic;
+      await story.save();
+      res.json(story);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+
 // // 📚 Get all stories
 // router.get("/", async (req, res) => {
 //   const stories = await Story.find().sort({ createdAt: -1 });
