@@ -5,7 +5,6 @@ const { auth } = require('../middleware/auth');
 
 router.post('/generate-story', auth, storyGeneration);
 router.post('/create-audio', auth, createStoryAudio);
-router.get('/get-speakers', auth, getSpeakers);
 router.get('/', auth, getStories);
 router.patch('/:id/visibility', auth, toggleVisibility);
 
